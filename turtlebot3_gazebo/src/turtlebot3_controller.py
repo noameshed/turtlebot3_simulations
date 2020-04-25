@@ -13,7 +13,7 @@ def update_pose(data):
         robot_pose = data.pose[1]
         position = robot_pose.position
         orient = robot_pose.orientation
-        print(position)
+        # print(position)
         # time.sleep(1)
 
     except:
