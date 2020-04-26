@@ -31,6 +31,7 @@ class HumanController():
 
         self.rate = rospy.Rate(10)
         self.states = [p1_state, p2_state, p3_state, p4_state]
+        self.final_goals = [(7, -2), (7, 2), (-7, -2), (-7, 2)]
         self.poses = None
         self.positions = None
 
@@ -109,9 +110,16 @@ class HumanController():
             x = threading.Thread(target=self.go_to_goal, args=(goal, i))
             threads.append(x)
             x.start()
-        for t in threads:
+            time.sleep(2) # move 2 secs apart
+        threads2 = []
+        for i, t in enumerate(threads):
             t.join()
-        # self.go_to_goal(goal, 1)
+            y = threading.Thread(target=self.go_to_goal, args=(self.final_goals[i], i))
+            threads2.append(y)
+            y.start()
+        for t in threads2:
+            t.join()
+
 
 
 if __name__=="__main__":
