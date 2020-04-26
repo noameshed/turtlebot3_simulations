@@ -13,7 +13,8 @@ def update_pose(data):
         all_names = data.name
         p1_ind = all_names.index('person_1')
         p1_pose = data.pose[p1_ind]
-        robot_pose = data.pose[1]
+        robot_ind = all_names.index('turtlebot3_burger')
+        robot_pose = data.pose[robot_ind]
         robot_position = robot_pose.position
         robot_orient = robot_pose.orientation
         p1_position = p1_pose.position
