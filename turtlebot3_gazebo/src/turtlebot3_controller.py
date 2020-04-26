@@ -57,8 +57,8 @@ if __name__=="__main__":
     rate = rospy.Rate(10)
     t = 0
     while not rospy.is_shutdown():
-        x_vel = math.sin(t)
-        # x_vel = 2
+        # x_vel = math.sin(t)
+        x_vel = 2
         ang_vel = 1
         twist.linear.x = x_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = ang_vel
