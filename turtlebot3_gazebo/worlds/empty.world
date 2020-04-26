@@ -20,23 +20,29 @@
     <include>
       <uri>model://person_standing</uri>
       <name>person_1</name>
-      <pose>0.0 3.0 0 0 0 0</pose>
+      <pose>-7 2 0 0 0 1.57</pose>
     </include>
 
     <include>
       <uri>model://person_standing</uri>
       <name>person_2</name>
-      <pose>1.0 3.0 0 0 0 0</pose>
+      <pose>-7 -2.0 0 0 0 1.57</pose>
     </include>
 
     <include>
       <uri>model://person_standing</uri>
       <name>person_3</name>
-      <pose>2.0 0.0 0 0 0 0</pose>
+      <pose>7 2 0 0 0 -1.57</pose>
     </include>
 
     <include>
-      <uri>model://big_room_2_door</uri>
+      <uri>model://person_standing</uri>
+      <name>person_4</name>
+      <pose>7 -2.0 0 0 0 -1.57</pose>
+    </include>
+
+    <include>
+      <uri>model://one_door</uri>
     </include>
 
 
