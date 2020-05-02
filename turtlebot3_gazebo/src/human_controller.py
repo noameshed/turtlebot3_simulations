@@ -80,7 +80,7 @@ class HumanController():
 
     def go_to_goal(self, goal, person, tolerance):
         """Get the person to go to the defined goal,
-            goal should be a [x, y] array type. 
+            goal should be a [x, y] array type.
             person index in [0, 1, 2, 3]
             Try on person 1 first, probably need to add the specific person as argument"""
         # tolerance = 0.05
@@ -103,7 +103,7 @@ class HumanController():
             self.states[person].twist.linear.y = scale*yVel
             self.pub.publish(self.states[person])
         print("done moving to goal")
-    
+
     def control_human(self, goal):
         """Main function to control all humans"""
         while self.poses==None:
@@ -113,7 +113,7 @@ class HumanController():
             x = threading.Thread(target=self.go_to_goal, args=(goal, i, 0.3))
             threads.append(x)
             x.start()
-            time.sleep(0.5) # move 2 secs apart
+            time.sleep(1) # move 2 secs apart
         threads2 = []
         for i, t in enumerate(threads):
             t.join()
@@ -124,7 +124,7 @@ class HumanController():
             t.join()
 
     def get_point_force(self, point, goal, person):
-        """At the given point in the map, get the gradient of the 
+        """At the given point in the map, get the gradient of the
         potential function. point and goal should both be 1x2 np arrays"""
         wall_rep_const = 5
         human_rep_const = 15 #stay further away from humans than to walls
