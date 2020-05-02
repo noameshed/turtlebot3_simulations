@@ -59,7 +59,7 @@ if __name__=="__main__":
     while not rospy.is_shutdown():
         # x_vel = math.sin(t)
         x_vel = 2
-        ang_vel = 1
+        ang_vel = math.sin(t)
         twist.linear.x = x_vel; twist.linear.y = 0.0; twist.linear.z = 0.0
         twist.angular.x = 0.0; twist.angular.y = 0.0; twist.angular.z = ang_vel
         pub.publish(twist)

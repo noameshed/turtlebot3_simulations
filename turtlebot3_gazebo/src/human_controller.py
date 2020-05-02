@@ -6,6 +6,7 @@ import math
 from gazebo_msgs.msg import ModelStates, ModelState, LinkState
 import time
 import threading
+import numpy as np
 
 class HumanController():
     """Human navigation based on social forces model"""
@@ -34,6 +35,8 @@ class HumanController():
         self.final_goals = [(7, -2), (7, 2), (-7, -2), (-7, 2)]
         self.poses = None
         self.positions = None
+        self.x_bound = [-7.5, 7.5]
+        self.y_bound = [-2.5, 2.5]
 
         print('Human Controller launched initialized')
 
@@ -71,33 +74,33 @@ class HumanController():
             pass
 
     def get_distance(self, position, goal):
-        return math.sqrt((position.x-goal[0])**2+(position.y-goal[1])**2)
+        position = np.array([position.x, position.y])
+        return np.linalg.norm(position-goal)
 
 
-    def go_to_goal(self, goal, person):
+    def go_to_goal(self, goal, person, tolerance):
         """Get the person to go to the defined goal,
             goal should be a [x, y] array type. 
             person index in [0, 1, 2, 3]
             Try on person 1 first, probably need to add the specific person as argument"""
-        tolerance = 0.05
+        # tolerance = 0.05
 
         print("STARTING HUMAN NAVIGATION")
+        goal = np.array(goal)
         # curr_time = time.time()
         while self.get_distance(self.positions[person], goal)>tolerance:
-            # prev_time = curr_time
-            # curr_time = time.time()
-            # dur = curr_time-prev_time
-            x_diff = goal[0]-self.positions[person].x
-            y_diff = goal[1]-self.positions[person].y
-            # print(self.states[person])
-            # print(self.poses[person])
+            # get potential gradient and set velocity
+            curr_position = np.array([self.positions[person].x, self.positions[person].y])
+            grad = self.get_point_force(curr_position, goal, person)
+            xVel = -grad[0]
+            yVel = -grad[1]
             self.states[person].pose.orientation = self.poses[person].orientation
             #normalize to max vel
-            scale = self.human_speed/math.sqrt(x_diff**2+y_diff**2)
-            self.states[person].pose.position.x = self.positions[person].x+scale*x_diff*0.01
-            self.states[person].pose.position.y = self.positions[person].y+scale*y_diff*0.01
-            self.states[person].twist.linear.x = scale*x_diff
-            self.states[person].twist.linear.y = scale*y_diff
+            scale = self.human_speed/np.linalg.norm(np.array([xVel, yVel]))
+            self.states[person].pose.position.x = self.positions[person].x+scale*xVel*0.01
+            self.states[person].pose.position.y = self.positions[person].y+scale*yVel*0.01
+            self.states[person].twist.linear.x = scale*xVel
+            self.states[person].twist.linear.y = scale*yVel
             self.pub.publish(self.states[person])
         print("done moving to goal")
     
@@ -107,20 +110,69 @@ class HumanController():
             time.sleep(1)
         threads = []
         for i in range(4):
-            x = threading.Thread(target=self.go_to_goal, args=(goal, i))
+            x = threading.Thread(target=self.go_to_goal, args=(goal, i, 0.3))
             threads.append(x)
             x.start()
-            time.sleep(2) # move 2 secs apart
+            time.sleep(0.5) # move 2 secs apart
         threads2 = []
         for i, t in enumerate(threads):
             t.join()
-            y = threading.Thread(target=self.go_to_goal, args=(self.final_goals[i], i))
+            y = threading.Thread(target=self.go_to_goal, args=(self.final_goals[i], i, 0.05))
             threads2.append(y)
             y.start()
         for t in threads2:
             t.join()
 
+    def get_point_force(self, point, goal, person):
+        """At the given point in the map, get the gradient of the 
+        potential function. point and goal should both be 1x2 np arrays"""
+        wall_rep_const = 5
+        human_rep_const = 15 #stay further away from humans than to walls
+        att_const = 5
+        human_radius = 1 # influence range of other humans
+        wall_radius = 0.5 # influence range of the wall
+        robot_rep_const = 20
+        robot_radius = 2
+        #get components of gradients and then sum
+        att = att_const*(point-goal) #attraction to the goal
+        human_rep = np.array([0, 0])
+        for i in range(4):
+            h_position = self.positions[i]
+            dist_to_person = np.linalg.norm(point-[h_position.x, h_position.y])
+            if i!=person and dist_to_person<human_radius: #only consider other humans
+                nabla = ([h_position.x, h_position.y]-point)/dist_to_person
+                human_rep = human_rep+human_rep_const*nabla*(1/dist_to_person)
+        # robot repulsion
+        dist_to_robot = np.linalg.norm(point-[self.robot_position.x, self.robot_position.y])
+        if dist_to_robot<robot_radius:
+            nabla = ([self.robot_position.x, self.robot_position.y]-point)/dist_to_robot
+            robot_rep = robot_rep_const*nabla*(1/dist_to_robot)
+        else:
+            robot_rep = [0,0]
+        # get gradients due to walls
+        wall_rep = np.array([0,0])
+        if abs(point[0])<wall_radius and (point[1]>0.3 or point[1]<-0.3): #close to the middle wall
+            wall_rep = wall_rep+np.array([wall_rep_const*(-1/point[0]), 0])
+        elif abs(point[0]-(-7.5))<wall_radius:
+            wall_rep = wall_rep+np.array([wall_rep_const*(1/(-7.5-point[0])), 0])
+        elif abs(point[0]-7.5)<wall_radius:
+            wall_rep = wall_rep+np.array([wall_rep_const*(1/(7.5-point[0])), 0])
 
+        if abs(point[1]-(-2.5))<wall_radius: #top and bottom wall
+            wall_rep = wall_rep+np.array([0, wall_rep_const*(1/(-2.5-point[1]))])
+        elif abs(point[1]-2.5)<wall_radius: #top and bottom wall
+            wall_rep = wall_rep+np.array([0, wall_rep_const*(1/(2.5-point[1]))])
+        # print("att: ", att)
+        # print("wall rep: ", wall_rep)
+        # print("human_rep: ", human_rep)
+        try:
+            final_grad =att+wall_rep+human_rep+robot_rep
+        except:
+            print("att: ", att)
+            print("wall rep: ", wall_rep)
+            print("human_rep: ", human_rep)
+
+        return final_grad
 
 if __name__=="__main__":
     try:
