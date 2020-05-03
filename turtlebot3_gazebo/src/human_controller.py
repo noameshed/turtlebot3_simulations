@@ -64,6 +64,9 @@ class HumanController():
 
             robot_ind = all_names.index('turtlebot3_burger')
             robot_pose = data.pose[robot_ind]
+            robot_twist = data.twist[robot_ind]
+            self.robot_linvel = robot_twist.linear.x
+            self.robot_angvel = robot_twist.angular.z
             self.robot_position = robot_pose.position
             self.positions = [p1_position, p2_position, p3_position, p4_position]
             self.poses = [p1_pose, p2_pose, p3_pose, p4_pose]
@@ -131,8 +134,11 @@ class HumanController():
         att_const = 5
         human_radius = 1 # influence range of other humans
         wall_radius = 0.5 # influence range of the wall
-        robot_rep_const = 20
-        robot_radius = 2
+        # the robot repulsion parameters should be dynamic
+
+        robot_rep_const = 50*abs(self.robot_linvel+self.robot_angvel)+1
+        # print(robot_rep_const)
+        robot_radius = 1.5
         #get components of gradients and then sum
         att = att_const*(point-goal) #attraction to the goal
         human_rep = np.array([0, 0])

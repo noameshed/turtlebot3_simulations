@@ -198,7 +198,7 @@ class RobotController():
         endpoint = self.pose_to_gridpoint(self.final_goal.position)
 
         path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
-        # print(path)
+        print(path)
 
         for p in path:
             self.go_to_goal(p, tolerance=0.15)
@@ -208,8 +208,8 @@ if __name__=="__main__":
     try:
         door_pose = [0, 0]
         robot_goal = Pose()
-        robot_goal.position.x = -2
-        robot_goal.position.y = 0
+        robot_goal.position.x = 2
+        robot_goal.position.y = 2
         robot_goal.position.z = 0
         xlim = [-7.5, 7.5]
         ylim = [-2.5, 2.5]
