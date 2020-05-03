@@ -7,6 +7,7 @@ import math
 from gazebo_msgs.msg import ModelStates, ModelState, LinkState
 import time
 import numpy as np
+from AStarSearch import search
 
 class RobotController():
     """Robot navigation model following Sisbot et al's 'A Human Aware Mobile
@@ -18,22 +19,21 @@ class RobotController():
 
         self.pose_subscriber = rospy.Subscriber('/gazebo/model_states', ModelStates, self.update_pose)
 
-        # Initialize robot state
-        # self.robot_state = ModelState()
-        # self.robot_state.model_name = 'turtlebot3_burger'
-
-
+        # Initialize human states
         self.people = ['person_1', 'person_2', 'person_3', 'person_4']
         self.rate = rospy.Rate(10)
-        self.final_goal = (-5, 0)
         self.human_poses = None
         self.human_positions = None
 
+        # Robot current and goal locations
         self.pose = None
+        self.final_goal = Pose()
 
-        # Boundaries of the room
+        # Initialize the room cost map
+        self.cost_grid = []
         self.x_bound = [-7.5, 7.5]
         self.y_bound = [-2.5, 2.5]
+        self.reset_cost_grid()
 
         self.msg = geometry_msgs.msg.Twist()
         self.reset()
@@ -87,7 +87,31 @@ class RobotController():
     	self.msg.angular.y = 0
     	self.msg.angular.z = 0
 
-    def cost_map(self, sigma, n):
+    def reset_cost_grid(self):
+        # Initialize room map
+        grid_block_size = 0.25 # Map detail is to the closest 1/4 block
+        num_xblocks = int((1./grid_block_size) * (self.x_bound[1]-self.x_bound[0]))
+        num_yblocks = int((1./grid_block_size) * (self.y_bound[1]-self.y_bound[0]))
+        self.vx = np.linspace(self.x_bound[0], self.x_bound[1], num_xblocks)
+        self.vy = np.linspace(self.y_bound[0], self.y_bound[1], num_yblocks)
+        self.map_x, self.map_y = np.meshgrid(self.vx, self.vy)
+        self.cost_grid = np.zeros(self.map_x.shape)
+
+        # Set wall costs to infinity
+        self.cost_grid[0,:] = np.inf*np.ones(self.cost_grid[0,:].shape)
+        self.cost_grid[num_yblocks-1,:] = np.inf*np.ones(self.cost_grid[num_yblocks-1,:].shape)
+        self.cost_grid[:,0] = np.inf*np.ones(self.cost_grid[:,0].shape)
+        self.cost_grid[:,num_xblocks-1] = np.inf*np.ones(self.cost_grid[:,num_xblocks-1].shape)
+        # Walls around door
+        wall_len = 2.5 - (0.7/2)
+        num_blocks_door = int(np.floor((1./grid_block_size) * wall_len))
+        self.cost_grid[:num_blocks_door,num_xblocks/2] = \
+            np.inf*np.ones(self.cost_grid[:num_blocks_door,num_xblocks/2].shape)
+        self.cost_grid[num_yblocks-num_blocks_door:,num_xblocks/2] = \
+            np.inf*np.ones(self.cost_grid[num_yblocks-num_blocks_door:,num_xblocks/2].shape)
+
+
+    def update_map(self, sigma, n):
         """Creates a Gaussian cost map for a human in the room based on sigma. all
         humans in the environment have the same cost map, just centered at
         different locations. n is the size of the cost map (it is (2n+1)x(2n+n))"""
@@ -105,7 +129,7 @@ class RobotController():
     def get_angle(self, position, goal):
         """Computes angle between robot and goal"""
         position = np.array([position.x, position.y])
-        diff = position - goal
+        diff = goal - position
         angle = math.atan2(diff[1], diff[0])
         return angle
 
@@ -118,17 +142,17 @@ class RobotController():
         goal = np.array(goal)
         # curr_time = time.time()
         dist = self.get_distance(self.pose.position, goal)
+        print(self.pose.position, goal)
         while dist>tolerance:
 
             # Calculate the distance and angle between robot and goal
             dist = self.get_distance(self.pose.position, goal)
             angle = self.get_angle(self.pose.position, goal)
             theta_robot = self.pose.orientation.z
-            print(theta_robot, dist)
 
             # Set robot velocity
-            self.msg.linear.x = 0.25   # Move faster when farther from the goal
-            # self.msg.angular.z = 2*(angle - theta_robot)
+            self.msg.linear.x = min(0.25, dist+0.1)   # Move faster when farther from the goal
+            self.msg.angular.z = (angle - theta_robot)
 
             self.pub.publish(self.msg)
             self.rate.sleep()
@@ -139,19 +163,56 @@ class RobotController():
 
         print("robot done moving to goal")
 
-    def control_robot(self, door):
+    def pose_to_gridpoint(self, pose):
+        """Computes the indices of the gridpoint which the position is closest to"""
+        xdist = np.inf
+        xidx = 0
+        for i,x in enumerate(self.vx):
+            if abs(pose.x - x) < xdist:
+                xdist = abs(pose.x - x)
+                xidx = i
+
+        ydist = np.inf
+        yidx = 0
+        print('VX and VY LENGTHS')
+        print(len(self.vx))
+        print(len(self.vy))
+        for i,y in enumerate(self.vy):
+            if abs(pose.y - y) < ydist:
+                ydist = abs(pose.y - y)
+                yidx = i
+
+        return (yidx,xidx)
+
+
+    def control_robot(self, final_goal):
+        """Controls the robots movement along the A* path to the goal"""
+        # Wait for robot initialization
         while self.pose == None:
             time.sleep(1)
-        self.go_to_goal(self.final_goal, tolerance=0.05)
-        return
+        self.final_goal = final_goal
+
+        # Initialize A* map
+        startpoint = self.pose_to_gridpoint(self.pose.position)
+        endpoint = self.pose_to_gridpoint(self.final_goal.position)
+
+        path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
+
+        for p in path:
+            self.go_to_goal(p, tolerance=0.05)
+
 
 if __name__=="__main__":
     try:
         door_pose = [0, 0]
+        robot_goal = Pose()
+        robot_goal.position.x = -2
+        robot_goal.position.y = 0
+        robot_goal.position.z = 0
         xlim = [-7.5, 7.5]
         ylim = [-2.5, 2.5]
         rcontrol = RobotController()
-        rcontrol.control_robot(door_pose)
+        rcontrol.control_robot(robot_goal)
 
     except rospy.ROSInterruptException:
         pass
