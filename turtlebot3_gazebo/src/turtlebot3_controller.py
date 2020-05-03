@@ -9,6 +9,7 @@ import time
 import numpy as np
 from AStarSearch import search
 import tf
+from matplotlib import pyplot as plt
 
 class RobotController():
     """Robot navigation model following Sisbot et al's 'A Human Aware Mobile
@@ -100,21 +101,23 @@ class RobotController():
 
     def set_cost_grid_walls(self):
         grid_block_size = 0.25 # Map detail is to the closest 1/4 block
+        # wall_cost = np.inf
+        wall_cost = 1000
         num_xblocks = int((1./grid_block_size) * (self.x_bound[1]-self.x_bound[0]))
         num_yblocks = int((1./grid_block_size) * (self.y_bound[1]-self.y_bound[0]))
         # Set wall costs to infinity
-        self.cost_grid[0,:] = np.inf*np.ones(self.cost_grid[0,:].shape)
-        self.cost_grid[num_yblocks-1,:] = np.inf*np.ones(self.cost_grid[num_yblocks-1,:].shape)
-        self.cost_grid[:,0] = np.inf*np.ones(self.cost_grid[:,0].shape)
-        self.cost_grid[:,num_xblocks-1] = np.inf*np.ones(self.cost_grid[:,num_xblocks-1].shape)
+        self.cost_grid[0,:] = wall_cost*np.ones(self.cost_grid[0,:].shape)
+        self.cost_grid[num_yblocks-1,:] = wall_cost*np.ones(self.cost_grid[num_yblocks-1,:].shape)
+        self.cost_grid[:,0] = wall_cost*np.ones(self.cost_grid[:,0].shape)
+        self.cost_grid[:,num_xblocks-1] = wall_cost*np.ones(self.cost_grid[:,num_xblocks-1].shape)
 
         # Walls around door have cost of infinity
         wall_len = 2.5 - (0.7/2)
         num_blocks_door = int(np.floor((1./grid_block_size) * wall_len))
         self.cost_grid[:num_blocks_door+1,num_xblocks/2] = \
-            np.inf*np.ones(self.cost_grid[:num_blocks_door+1,num_xblocks/2].shape)
+            wall_cost*np.ones(self.cost_grid[:num_blocks_door+1,num_xblocks/2].shape)
         self.cost_grid[num_yblocks-num_blocks_door-1:,num_xblocks/2] = \
-            np.inf*np.ones(self.cost_grid[num_yblocks-num_blocks_door-1:,num_xblocks/2].shape)
+            wall_cost*np.ones(self.cost_grid[num_yblocks-num_blocks_door-1:,num_xblocks/2].shape)
 
         # Door goes to indices 9 and 11
 
@@ -130,12 +133,13 @@ class RobotController():
         x, y = np.meshgrid(np.linspace(-n,n,l), np.linspace(-n,n,l))
         d = np.sqrt(x*x+y*y)
         const = 1./(sigma*math.sqrt(2*math.pi))
-        gauss = 1e10 * const * np.exp(-0.5*(d/sigma)**2)
-
+        gauss = 1e0 * const * np.exp(-0.5*(d/sigma)**2)
+        # print("GAUSSIAN")
+        # print(gauss)
         # Update the cost grid based on each person's location
         self.reset_cost_grid()
         for pos in self.human_positions:
-            gauss = 1e10 * const * np.exp(-0.5*(d/sigma)**2)
+            gauss = 1e0 * const * np.exp(-0.5*(d/sigma)**2)
             # Don't need to worry about walls because adding a cost to np.inf
             # is still np.inf
             pos_idx = self.pose_to_gridpoint(pos)
@@ -186,7 +190,6 @@ class RobotController():
     def go_to_goal(self, goal, tolerance):
         """Get the robot to go to the defined goal,
             goal should be a [x, y] array type."""
-        # tolerance = 0.05
 
         print("STARTING ROBOT NAVIGATION")
         goal = np.array(goal)
@@ -281,17 +284,24 @@ class RobotController():
         # Initialize A* map
         startpoint = self.pose_to_gridpoint(self.pose.position)
         endpoint = self.pose_to_gridpoint(self.final_goal.position)
-
+        self.update_map(sigma=1, n=5)
+        print(self.cost_grid)
+        # plt.imshow(self.cost_grid, cmap='hot', interpolation='nearest')
+        # plt.show()
         path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
-        found_goal = False
+        print(path)
+        # found_goal = False
         while len(path)>0:
             p = path.pop(0)
             self.go_to_goal(p, tolerance=0.125)
 
             # Update the map and grid costs with human positions
             self.update_map(sigma=1, n=5)
-            print('COST GRID')
-            print(self.cost_grid[:,27:33])
+            # print('COST GRID')
+            # print(self.cost_grid[:,27:33])
+            # print(self.cost_grid)
+            # plt.imshow(self.cost_grid, cmap='hot', interpolation='nearest')
+            # plt.show()
             startpoint = self.pose_to_gridpoint(self.pose.position)
             path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
 

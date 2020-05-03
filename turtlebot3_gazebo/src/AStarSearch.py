@@ -46,7 +46,7 @@ def get_adjacent_points(grid, point_idx):
 	# Returns a list of the grid coordinates adjacent to the current point
 	(w,h) = grid.shape
 	(x,y) = point_idx
-
+	# print("THIS INdex:" , point_idx)
 	# Get the in-bound point coordinates
 	left = max(x-1, 0)
 	right = min(x+1, w-1)
@@ -60,7 +60,7 @@ def get_adjacent_points(grid, point_idx):
 			if (i,j) == (x,y):
 				continue
 			points.append((i,j))
-
+	# print("NEIGHBORS: ", points)
 	return points
 
 def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
@@ -92,7 +92,7 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 	# Keep looking until we get to the goal
 
 	while len(tovisit)>0:
-
+		print(len(tovisit))
 		# Get point in open list with smallest cost F=G+H
 		cur_node = tovisit[0]
 		cur_idx = 0
@@ -120,7 +120,7 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 		# Current node is the parent
 		neighbors = []
 		for idx in get_adjacent_points(costgrid, cur_node.idx):
-			i,j = idx
+			(i,j) = idx
 			pos = (xgrid[i,j],ygrid[i,j])
 			node = Node(cur_node, pos, idx)
 			neighbors.append(node)
