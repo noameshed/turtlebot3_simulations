@@ -21,7 +21,7 @@ class RobotController():
 
         # Initialize human states
         self.people = ['person_1', 'person_2', 'person_3', 'person_4']
-        self.rate = rospy.Rate(10)
+        self.rate = rospy.Rate(30)
         self.human_poses = None
         self.human_positions = None
 
@@ -143,17 +143,18 @@ class RobotController():
         # curr_time = time.time()
         dist = self.get_distance(self.pose.position, goal)
         print(self.pose.position, goal)
+        M = np.zeros((2, 2))
+        vel_multiplier = 1
         while dist>tolerance:
 
             # Calculate the distance and angle between robot and goal
             dist = self.get_distance(self.pose.position, goal)
             angle = self.get_angle(self.pose.position, goal)
             theta_robot = self.pose.orientation.z
-
+            
             # Set robot velocity
-            self.msg.linear.x = min(0.25, dist+0.1)   # Move faster when farther from the goal
-            self.msg.angular.z = (angle - theta_robot)
-
+            self.msg.linear.x = 0.3+min(0.25, dist+0.1)   # Move faster when farther from the goal
+            self.msg.angular.z = 0.1+(angle - theta_robot)
             self.pub.publish(self.msg)
             self.rate.sleep()
 
@@ -161,7 +162,7 @@ class RobotController():
         self.reset()
         self.pub.publish(self.msg)
 
-        print("robot done moving to goal")
+        print("robot done moving to goal: ", goal)
 
     def pose_to_gridpoint(self, pose):
         """Computes the indices of the gridpoint which the position is closest to"""
@@ -197,9 +198,10 @@ class RobotController():
         endpoint = self.pose_to_gridpoint(self.final_goal.position)
 
         path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
+        # print(path)
 
         for p in path:
-            self.go_to_goal(p, tolerance=0.05)
+            self.go_to_goal(p, tolerance=0.15)
 
 
 if __name__=="__main__":
