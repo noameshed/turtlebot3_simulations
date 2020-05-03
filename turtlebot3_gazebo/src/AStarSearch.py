@@ -29,11 +29,15 @@ def heuristic(grid, xgrid, ygrid, goal):
 	ygoal = goal[1]*np.ones(H.shape)
 
 	# compute distance from goal to every location
-	H = 1000*np.sqrt((xgoal-xgrid)**2 + (ygoal-ygrid)**2)
+	H = np.sqrt((xgoal-xgrid)**2 + (ygoal-ygrid)**2)
 
 	# print('GRIDSHAPE', grid.shape)
 	# print(np.argwhere(np.isinf(grid)))
+	# print('HEURISTIC GRID')
+	# print(np.sum(np.isinf(grid)))
+
 	for i in np.argwhere(np.isinf(grid)):
+		# print(i)
 		H[i[0],i[1]] = np.inf
 
 	return H
@@ -63,7 +67,7 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 
 	# Perform an A* search on the provided cost graph
 	# Start at the start point and end at the goal point
-
+	# print(costgrid[:,27:33])
 	path = []
 	# Check if start and goal are already close to each other, then we're done
 	si, sj = start_idx
@@ -71,11 +75,12 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 	start_pos = (xgrid[si,sj],ygrid[si,sj])
 	goal_pos = (xgrid[gi,gj],ygrid[gi,gj])
 
-	if np.sqrt(np.sum(np.array(start_pos)-np.array(goal_pos))**2) < 0.01:
+	if np.sqrt(np.sum(np.array(start_pos)-np.array(goal_pos))**2) < 0.125:
 		return []
 
 	# Create heuristic matrix H (Euclidean distance to goal)
 	H = heuristic(costgrid, xgrid, ygrid, goal_pos)
+	# print(H[:,27:33])
 	# Initialize open (unsearched) and closed (searched) lists
 	startnode = Node(None, start_pos, start_idx)
 	endnode = Node(None, goal_pos, goal_idx)
@@ -85,6 +90,7 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 	visited = []
 
 	# Keep looking until we get to the goal
+
 	while len(tovisit)>0:
 
 		# Get point in open list with smallest cost F=G+H
@@ -108,7 +114,7 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 				cur = cur.parent
 
 			path.reverse()		# path is from goal to start
-			return path
+			return path[1:]		# Don't need to include starting position
 
 		# Get adjacent points and convert to nodes
 		# Current node is the parent

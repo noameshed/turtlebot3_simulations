@@ -33,6 +33,7 @@ class RobotController():
         self.cost_grid = []
         self.x_bound = [-7.5, 7.5]
         self.y_bound = [-2.5, 2.5]
+        self.path = []
         self.reset_cost_grid()
 
         self.msg = geometry_msgs.msg.Twist()
@@ -69,7 +70,6 @@ class RobotController():
             robot_ind = all_names.index('turtlebot3_burger')
             robot_pose = data.pose[robot_ind]
             self.pose = robot_pose
-            self.goal = (-3, 0)
 
             # print('robot', robot_pose)
 
@@ -88,7 +88,7 @@ class RobotController():
     	self.msg.angular.z = 0
 
     def reset_cost_grid(self):
-        # Initialize room map
+        # Initialize empty room map
         grid_block_size = 0.25 # Map detail is to the closest 1/4 block
         num_xblocks = int((1./grid_block_size) * (self.x_bound[1]-self.x_bound[0]))
         num_yblocks = int((1./grid_block_size) * (self.y_bound[1]-self.y_bound[0]))
@@ -97,30 +97,79 @@ class RobotController():
         self.map_x, self.map_y = np.meshgrid(self.vx, self.vy)
         self.cost_grid = np.zeros(self.map_x.shape)
 
+    def set_cost_grid_walls(self):
+        grid_block_size = 0.25 # Map detail is to the closest 1/4 block
+        num_xblocks = int((1./grid_block_size) * (self.x_bound[1]-self.x_bound[0]))
+        num_yblocks = int((1./grid_block_size) * (self.y_bound[1]-self.y_bound[0]))
         # Set wall costs to infinity
         self.cost_grid[0,:] = np.inf*np.ones(self.cost_grid[0,:].shape)
         self.cost_grid[num_yblocks-1,:] = np.inf*np.ones(self.cost_grid[num_yblocks-1,:].shape)
         self.cost_grid[:,0] = np.inf*np.ones(self.cost_grid[:,0].shape)
         self.cost_grid[:,num_xblocks-1] = np.inf*np.ones(self.cost_grid[:,num_xblocks-1].shape)
-        # Walls around door
+
+        # Walls around door have cost of infinity
         wall_len = 2.5 - (0.7/2)
         num_blocks_door = int(np.floor((1./grid_block_size) * wall_len))
-        self.cost_grid[:num_blocks_door,num_xblocks/2] = \
-            np.inf*np.ones(self.cost_grid[:num_blocks_door,num_xblocks/2].shape)
-        self.cost_grid[num_yblocks-num_blocks_door:,num_xblocks/2] = \
-            np.inf*np.ones(self.cost_grid[num_yblocks-num_blocks_door:,num_xblocks/2].shape)
+        self.cost_grid[:num_blocks_door+1,num_xblocks/2] = \
+            np.inf*np.ones(self.cost_grid[:num_blocks_door+1,num_xblocks/2].shape)
+        self.cost_grid[num_yblocks-num_blocks_door-1:,num_xblocks/2] = \
+            np.inf*np.ones(self.cost_grid[num_yblocks-num_blocks_door-1:,num_xblocks/2].shape)
+
+        # Door goes to indices 9 and 11
 
 
     def update_map(self, sigma, n):
-        """Creates a Gaussian cost map for a human in the room based on sigma. all
-        humans in the environment have the same cost map, just centered at
-        different locations. n is the size of the cost map (it is (2n+1)x(2n+n))"""
-        x, y = np.meshgrid(np.linspace(-n,n,2*n+1), np.linspace(-n,n,2*n+1))
-        d = np.sqrt(x*x+y*y)
-        const = 1/(sigma*math.sqrt(2*math.pi))
-        map = const * np.exp(-0.5*(d/sigma)**2)
+        """Updates the cost map for the room based on the humans' current
+        locations. Each human has a Gaussian safety cost map based on sigma
+        and centered at their position.
+        n is the size of the individual human's personal space (it is (2n+1)x(2n+n))"""
 
-        return map
+        # Compute cost for a single person
+        l = 2*n+1
+        x, y = np.meshgrid(np.linspace(-n,n,l), np.linspace(-n,n,l))
+        d = np.sqrt(x*x+y*y)
+        const = 1./(sigma*math.sqrt(2*math.pi))
+        gauss = 1e10 * const * np.exp(-0.5*(d/sigma)**2)
+
+        # Update the cost grid based on each person's location
+        self.reset_cost_grid()
+        for pos in self.human_positions:
+            gauss = 1e10 * const * np.exp(-0.5*(d/sigma)**2)
+            # Don't need to worry about walls because adding a cost to np.inf
+            # is still np.inf
+            pos_idx = self.pose_to_gridpoint(pos)
+            x1, y1 = pos_idx - n
+            x2, y2 = pos_idx + n
+
+            max_x, max_y = self.cost_grid.shape
+            # Handle cost when people are near walls
+            # print(x1, x2, y1, y2)
+            # print(gauss.shape)
+            if x1 < 0:
+                # print('X1', x1, abs(x1))
+                gauss = gauss[abs(x1):,:]
+                # print(gauss.shape)
+                x1 = 0
+            elif x2 > max_x-1:
+                # print('X2', x2, l - (x2 - max_x+1))
+                gauss = gauss[:l-(x2 - max_x+1),:]
+                # print(gauss.shape)
+                x2 = max_x-1
+            if y1 < 0:
+                # print('Y1', y1,0-y1)
+                gauss = gauss[:,abs(y1):]
+                # print(gauss.shape)
+                y1 = 0
+            elif y2 > max_y-1:
+                # print('Y2', y2, l-(y2 - max_y+1))
+                gauss = gauss[:,:l-(y2 - max_y+1)]
+                # print(gauss.shape)
+                y2 = max_y-1
+
+
+            # Update cost grid
+            self.cost_grid[x1:x2+1, y1:y2+1] = gauss
+        self.set_cost_grid_walls()
 
     def get_distance(self, position, goal):
         position = np.array([position.x, position.y])
@@ -142,7 +191,6 @@ class RobotController():
         goal = np.array(goal)
         # curr_time = time.time()
         dist = self.get_distance(self.pose.position, goal)
-        print(self.pose.position, goal)
         M = np.zeros((2, 2))
         vel_multiplier = 1
         while dist>tolerance:
@@ -151,6 +199,8 @@ class RobotController():
             dist = self.get_distance(self.pose.position, goal)
             angle = self.get_angle(self.pose.position, goal)
             theta_robot = self.pose.orientation.z
+
+            # Robot motion controller
             del_x = vel_multiplier*(goal[0]-self.pose.position.x)
             del_y = vel_multiplier*(goal[1]-self.pose.position.y)
             M[0, 0] = np.cos(theta_robot)
@@ -183,16 +233,12 @@ class RobotController():
 
         ydist = np.inf
         yidx = 0
-        print('VX and VY LENGTHS')
-        print(len(self.vx))
-        print(len(self.vy))
         for i,y in enumerate(self.vy):
             if abs(pose.y - y) < ydist:
                 ydist = abs(pose.y - y)
                 yidx = i
 
-        return (yidx,xidx)
-
+        return np.array([yidx,xidx])
 
     def control_robot(self, final_goal):
         """Controls the robots movement along the A* path to the goal"""
@@ -206,10 +252,18 @@ class RobotController():
         endpoint = self.pose_to_gridpoint(self.final_goal.position)
 
         path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
-        print(path)
+        found_goal = False
+        while len(path)>0:
+            p = path.pop(0)
+            self.go_to_goal(p, tolerance=0.125)
 
-        for p in path:
-            self.go_to_goal(p, tolerance=0.15)
+            # Update the map and grid costs with human positions
+            self.update_map(sigma=1, n=5)
+            print('COST GRID')
+            print(self.cost_grid[:,27:33])
+            startpoint = self.pose_to_gridpoint(self.pose.position)
+            path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
+
 
 
 if __name__=="__main__":
