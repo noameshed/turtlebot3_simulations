@@ -151,10 +151,18 @@ class RobotController():
             dist = self.get_distance(self.pose.position, goal)
             angle = self.get_angle(self.pose.position, goal)
             theta_robot = self.pose.orientation.z
-            
+            del_x = vel_multiplier*(goal[0]-self.pose.position.x)
+            del_y = vel_multiplier*(goal[1]-self.pose.position.y)
+            M[0, 0] = np.cos(theta_robot)
+            M[0, 1] = np.sin(theta_robot)
+            M[1, 0] = -np.sin(theta_robot)/0.1
+            M[1, 1] = np.cos(theta_robot)/0.1
+            control = np.dot(M,np.array([[del_x], [del_y]]))
+            self.msg.linear.x = control[0]
+            self.msg.angular.z = control[1]
             # Set robot velocity
-            self.msg.linear.x = 0.3+min(0.25, dist+0.1)   # Move faster when farther from the goal
-            self.msg.angular.z = 0.1+(angle - theta_robot)
+            # self.msg.linear.x = 0.3+min(0.25, dist+0.1)   # Move faster when farther from the goal
+            # self.msg.angular.z = 0.1+(angle - theta_robot)
             self.pub.publish(self.msg)
             self.rate.sleep()
 
