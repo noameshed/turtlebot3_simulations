@@ -114,12 +114,17 @@ class RobotController():
         # Walls around door have cost of infinity
         wall_len = 2.5 - (0.7/2)
         num_blocks_door = int(np.floor((1./grid_block_size) * wall_len))
-        self.cost_grid[:num_blocks_door+1,num_xblocks/2] = \
-            wall_cost*np.ones(self.cost_grid[:num_blocks_door+1,num_xblocks/2].shape)
-        self.cost_grid[num_yblocks-num_blocks_door-1:,num_xblocks/2] = \
-            wall_cost*np.ones(self.cost_grid[num_yblocks-num_blocks_door-1:,num_xblocks/2].shape)
+        door_top = num_blocks_door+1
+        door_bot = num_yblocks-num_blocks_door-1
+        door_left = num_xblocks/2 - 1
+        door_right = num_xblocks/2 + 1
 
-        # Door goes to indices 9 and 11
+        self.cost_grid[:door_bot,door_left:door_right] = \
+            wall_cost*np.ones(self.cost_grid[:door_top,door_left:door_right].shape)
+        self.cost_grid[door_top:,num_xblocks/2] = \
+            wall_cost*np.ones(self.cost_grid[door_top:,door_left:door_right].shape)
+
+        # Door goes to indices 9 and 11 in x direction (up-down)
 
 
     def update_map(self, sigma, n):
@@ -134,8 +139,7 @@ class RobotController():
         d = np.sqrt(x*x+y*y)
         const = 1./(sigma*math.sqrt(2*math.pi))
         gauss = 1e0 * const * np.exp(-0.5*(d/sigma)**2)
-        # print("GAUSSIAN")
-        # print(gauss)
+
         # Update the cost grid based on each person's location
         self.reset_cost_grid()
         for pos in self.human_positions:
@@ -148,27 +152,17 @@ class RobotController():
 
             max_x, max_y = self.cost_grid.shape
             # Handle cost when people are near walls
-            # print(x1, x2, y1, y2)
-            # print(gauss.shape)
             if x1 < 0:
-                # print('X1', x1, abs(x1))
                 gauss = gauss[abs(x1):,:]
-                # print(gauss.shape)
                 x1 = 0
             elif x2 > max_x-1:
-                # print('X2', x2, l - (x2 - max_x+1))
                 gauss = gauss[:l-(x2 - max_x+1),:]
-                # print(gauss.shape)
                 x2 = max_x-1
             if y1 < 0:
-                # print('Y1', y1,0-y1)
                 gauss = gauss[:,abs(y1):]
-                # print(gauss.shape)
                 y1 = 0
             elif y2 > max_y-1:
-                # print('Y2', y2, l-(y2 - max_y+1))
                 gauss = gauss[:,:l-(y2 - max_y+1)]
-                # print(gauss.shape)
                 y2 = max_y-1
 
 
@@ -193,7 +187,7 @@ class RobotController():
 
         print("STARTING ROBOT NAVIGATION")
         goal = np.array(goal)
-        # curr_time = time.time()
+
         dist = self.get_distance(self.pose.position, goal)
         M = np.zeros((2, 2))
         vel_multiplier = 3
@@ -212,7 +206,7 @@ class RobotController():
         #     euler = tf.transformations.euler_from_quaternion((r_th.x,r_th.y,r_th.z,r_th.w))
         #     self.rate.sleep()
 
-        
+
         # while dist>tolerance:
         #     self.msg.linear.x = vel_multiplier*dist
         #     self.msg.angular.z = 0
