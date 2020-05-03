@@ -10,6 +10,7 @@ import numpy as np
 from AStarSearch import search
 import tf
 from matplotlib import pyplot as plt
+import threading
 
 class RobotController():
     """Robot navigation model following Sisbot et al's 'A Human Aware Mobile
@@ -119,31 +120,33 @@ class RobotController():
         door_left = num_xblocks/2 - 1
         door_right = num_xblocks/2 + 1
 
-        self.cost_grid[:door_bot,door_left:door_right] = \
+        self.cost_grid[:door_top,door_left:door_right] = \
             wall_cost*np.ones(self.cost_grid[:door_top,door_left:door_right].shape)
-        self.cost_grid[door_top:,num_xblocks/2] = \
-            wall_cost*np.ones(self.cost_grid[door_top:,door_left:door_right].shape)
+        self.cost_grid[door_bot:,door_left:door_right] = \
+            wall_cost*np.ones(self.cost_grid[door_bot:,door_left:door_right].shape)
 
         # Door goes to indices 9 and 11 in x direction (up-down)
 
 
-    def update_map(self, sigma, n):
+    def update_map(self, sigma, n, mult):
         """Updates the cost map for the room based on the humans' current
         locations. Each human has a Gaussian safety cost map based on sigma
         and centered at their position.
-        n is the size of the individual human's personal space (it is (2n+1)x(2n+n))"""
+        n is the size of the individual human's personal space (it is (2n+1)x(2n+n))
+        mult is the scaling of the human safety cost. Higher mult would cause planner to 
+        get stuck more often"""
 
         # Compute cost for a single person
         l = 2*n+1
         x, y = np.meshgrid(np.linspace(-n,n,l), np.linspace(-n,n,l))
         d = np.sqrt(x*x+y*y)
         const = 1./(sigma*math.sqrt(2*math.pi))
-        gauss = 1e0 * const * np.exp(-0.5*(d/sigma)**2)
+        gauss = mult * const * np.exp(-0.5*(d/sigma)**2)
 
         # Update the cost grid based on each person's location
         self.reset_cost_grid()
         for pos in self.human_positions:
-            gauss = 1e0 * const * np.exp(-0.5*(d/sigma)**2)
+            gauss = mult * const * np.exp(-0.5*(d/sigma)**2)
             # Don't need to worry about walls because adding a cost to np.inf
             # is still np.inf
             pos_idx = self.pose_to_gridpoint(pos)
@@ -190,16 +193,17 @@ class RobotController():
 
         dist = self.get_distance(self.pose.position, goal)
         M = np.zeros((2, 2))
-        vel_multiplier = 3
+        vel_multiplier = 1
         ang_multiplier = 1
         angle = self.get_angle(self.pose.position, goal)
         r_th = self.pose.orientation
         euler = tf.transformations.euler_from_quaternion((r_th.x,r_th.y,r_th.z,r_th.w))
 
-        # while abs(angle-euler[2])>0.1:
-        #     print(euler)
-        #     print(angle)
-        #     self.msg.angular.z = 3*(angle - euler[2])
+        # while abs(angle-euler[2])>0.05:
+        #     # print(euler)
+        #     # print(angle)
+        #     self.msg.linear.x = 0
+        #     self.msg.angular.z = (angle - euler[2])
         #     self.pub.publish(self.msg)
         #     angle = self.get_angle(self.pose.position, goal)
         #     r_th = self.pose.orientation
@@ -222,18 +226,18 @@ class RobotController():
             dist = self.get_distance(self.pose.position, goal)
             angle = self.get_angle(self.pose.position, goal)
 
-            theta_robot = self.pose.orientation.z
+            # theta_robot = self.pose.orientation.z
 
             # Robot motion controller
-            del_x = vel_multiplier*(goal[0]-self.pose.position.x)
-            del_y = vel_multiplier*(goal[1]-self.pose.position.y)
-            M[0, 0] = np.cos(theta_robot)
-            M[0, 1] = np.sin(theta_robot)
-            M[1, 0] = -np.sin(theta_robot)/0.1
-            M[1, 1] = np.cos(theta_robot)/0.1
-            control = np.dot(M,np.array([[del_x], [del_y]]))
-            self.msg.linear.x = control[0]
-            self.msg.angular.z = control[1]
+            # del_x = vel_multiplier*(goal[0]-self.pose.position.x)
+            # del_y = vel_multiplier*(goal[1]-self.pose.position.y)
+            # M[0, 0] = np.cos(theta_robot)
+            # M[0, 1] = np.sin(theta_robot)
+            # M[1, 0] = -np.sin(theta_robot)/0.1
+            # M[1, 1] = np.cos(theta_robot)/0.1
+            # control = np.dot(M,np.array([[del_x], [del_y]]))
+            # self.msg.linear.x = control[0]
+            # self.msg.angular.z = control[1]
 
             r_th = self.pose.orientation
             euler = tf.transformations.euler_from_quaternion((r_th.x,r_th.y,r_th.z,r_th.w))
@@ -274,30 +278,51 @@ class RobotController():
         while self.pose == None:
             time.sleep(1)
         self.final_goal = final_goal
+        mult = 50 #default safety cost scale
+        n = 5 #default safety gaussian size
 
         # Initialize A* map
         startpoint = self.pose_to_gridpoint(self.pose.position)
         endpoint = self.pose_to_gridpoint(self.final_goal.position)
-        self.update_map(sigma=1, n=5)
-        print(self.cost_grid)
+        self.update_map(sigma=1, n=n, mult=mult)
+        # print(self.cost_grid)
         # plt.imshow(self.cost_grid, cmap='hot', interpolation='nearest')
         # plt.show()
-        path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
-        print(path)
+        path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint, {})
+        # print(path)
         # found_goal = False
         while len(path)>0:
+            mult = 10 #default safety cost scale
+            n = 5 #default safety gaussian size
             p = path.pop(0)
             self.go_to_goal(p, tolerance=0.125)
-
+            if len(path)==0:
+                print("Robot reached final goal")
+                break 
             # Update the map and grid costs with human positions
-            self.update_map(sigma=1, n=5)
+            self.update_map(sigma=1, n=n, mult=mult)
             # print('COST GRID')
             # print(self.cost_grid[:,27:33])
             # print(self.cost_grid)
             # plt.imshow(self.cost_grid, cmap='hot', interpolation='nearest')
             # plt.show()
             startpoint = self.pose_to_gridpoint(self.pose.position)
-            path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
+            path_dict = {'p': None}
+            t = threading.Thread(target=search, args=(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint, path_dict))
+            # path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
+            t.start()
+            t.join(timeout=2) #replan
+            path = path_dict['p']
+            while not path: # timed out, need to replan
+                mult = mult/2
+                print("stuck! replanning with smaller cost")
+                self.update_map(sigma=1, n=n, mult=mult)
+                path_dict = {'p': None}
+                t = threading.Thread(target=search, args=(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint, path_dict))
+                t.start()
+                t.join(timeout=2) #replan
+                path = path_dict['p']
+            # print("THREAD PATH IS: ", path_dict['p'])
 
 
 if __name__=="__main__":

@@ -12,7 +12,7 @@ class HumanController():
     """Human navigation based on social forces model"""
     def __init__(self):
         rospy.init_node('human_controller')
-        self.human_speed = 0.8 #typically 1.5 m/s
+        self.human_speed = 1 #typically 1.5 m/s
         self.pub = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=10)
         # self.pub = rospy.Publisher('/gazebo/set_link_state', LinkState, queue_size=10)
         self.pose_subscriber = rospy.Subscriber('/gazebo/model_states', ModelStates, self.update_pose)
@@ -116,7 +116,7 @@ class HumanController():
             x = threading.Thread(target=self.go_to_goal, args=(goal, i, 0.3))
             threads.append(x)
             x.start()
-            time.sleep(1) # move 2 secs apart
+            time.sleep(2) # move 2 secs apart
         threads2 = []
         for i, t in enumerate(threads):
             t.join()
@@ -136,7 +136,7 @@ class HumanController():
         wall_radius = 0.5 # influence range of the wall
         # the robot repulsion parameters should be dynamic
 
-        robot_rep_const = 50*abs(self.robot_linvel+self.robot_angvel)+1
+        robot_rep_const = 5*abs(self.robot_linvel+self.robot_angvel)+1
         # print(robot_rep_const)
         robot_radius = 1.5
         #get components of gradients and then sum

@@ -63,7 +63,7 @@ def get_adjacent_points(grid, point_idx):
 	# print("NEIGHBORS: ", points)
 	return points
 
-def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
+def search(costgrid, xgrid, ygrid, start_idx, goal_idx, out_dict):
 
 	# Perform an A* search on the provided cost graph
 	# Start at the start point and end at the goal point
@@ -76,6 +76,7 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 	goal_pos = (xgrid[gi,gj],ygrid[gi,gj])
 
 	if np.sqrt(np.sum(np.array(start_pos)-np.array(goal_pos))**2) < 0.125:
+		out_dict['p'] = []
 		return []
 
 	# Create heuristic matrix H (Euclidean distance to goal)
@@ -92,7 +93,6 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 	# Keep looking until we get to the goal
 
 	while len(tovisit)>0:
-		print(len(tovisit))
 		# Get point in open list with smallest cost F=G+H
 		cur_node = tovisit[0]
 		cur_idx = 0
@@ -114,6 +114,7 @@ def search(costgrid, xgrid, ygrid, start_idx, goal_idx):
 				cur = cur.parent
 
 			path.reverse()		# path is from goal to start
+			out_dict['p'] = path[1:]
 			return path[1:]		# Don't need to include starting position
 
 		# Get adjacent points and convert to nodes
