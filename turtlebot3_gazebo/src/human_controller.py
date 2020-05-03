@@ -12,7 +12,7 @@ class HumanController():
     """Human navigation based on social forces model"""
     def __init__(self):
         rospy.init_node('human_controller')
-        self.human_speed = 1.5 #typically 1.5 m/s
+        self.human_speed = 0.8 #typically 1.5 m/s
         self.pub = rospy.Publisher('/gazebo/set_model_state', ModelState, queue_size=10)
         # self.pub = rospy.Publisher('/gazebo/set_link_state', LinkState, queue_size=10)
         self.pose_subscriber = rospy.Subscriber('/gazebo/model_states', ModelStates, self.update_pose)

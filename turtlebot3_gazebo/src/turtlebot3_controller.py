@@ -8,6 +8,7 @@ from gazebo_msgs.msg import ModelStates, ModelState, LinkState
 import time
 import numpy as np
 from AStarSearch import search
+import tf
 
 class RobotController():
     """Robot navigation model following Sisbot et al's 'A Human Aware Mobile
@@ -192,12 +193,38 @@ class RobotController():
         # curr_time = time.time()
         dist = self.get_distance(self.pose.position, goal)
         M = np.zeros((2, 2))
-        vel_multiplier = 1
+        vel_multiplier = 3
+        ang_multiplier = 1
+        angle = self.get_angle(self.pose.position, goal)
+        r_th = self.pose.orientation
+        euler = tf.transformations.euler_from_quaternion((r_th.x,r_th.y,r_th.z,r_th.w))
+
+        # while abs(angle-euler[2])>0.1:
+        #     print(euler)
+        #     print(angle)
+        #     self.msg.angular.z = 3*(angle - euler[2])
+        #     self.pub.publish(self.msg)
+        #     angle = self.get_angle(self.pose.position, goal)
+        #     r_th = self.pose.orientation
+        #     euler = tf.transformations.euler_from_quaternion((r_th.x,r_th.y,r_th.z,r_th.w))
+        #     self.rate.sleep()
+
+        
+        # while dist>tolerance:
+        #     self.msg.linear.x = vel_multiplier*dist
+        #     self.msg.angular.z = 0
+        #     self.pub.publish(self.msg)
+
+        #     self.rate.sleep()
+        #     dist = self.get_distance(self.pose.position, goal)
+
+
         while dist>tolerance:
 
             # Calculate the distance and angle between robot and goal
             dist = self.get_distance(self.pose.position, goal)
             angle = self.get_angle(self.pose.position, goal)
+
             theta_robot = self.pose.orientation.z
 
             # Robot motion controller
@@ -210,9 +237,13 @@ class RobotController():
             control = np.dot(M,np.array([[del_x], [del_y]]))
             self.msg.linear.x = control[0]
             self.msg.angular.z = control[1]
+
+            r_th = self.pose.orientation
+            euler = tf.transformations.euler_from_quaternion((r_th.x,r_th.y,r_th.z,r_th.w))
+
             # Set robot velocity
-            # self.msg.linear.x = 0.3+min(0.25, dist+0.1)   # Move faster when farther from the goal
-            # self.msg.angular.z = 0.1+(angle - theta_robot)
+            self.msg.linear.x = min(dist, 0.5)   # Move faster when farther from the goal
+            self.msg.angular.z = 2*(angle - euler[2])
             self.pub.publish(self.msg)
             self.rate.sleep()
 
@@ -263,7 +294,6 @@ class RobotController():
             print(self.cost_grid[:,27:33])
             startpoint = self.pose_to_gridpoint(self.pose.position)
             path = search(self.cost_grid, self.map_x, self.map_y, startpoint, endpoint)
-
 
 
 if __name__=="__main__":
